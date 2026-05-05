@@ -1,0 +1,124 @@
+-- LocalScript in StarterPlayerScripts
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- player
+local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- set for scope
+local root
+local humanoid
+local angle
+local position = "right"
+
+-- function to determine where player faces
+local connection 
+local function lockOrientation()
+	
+	local character = player.Character
+	if not character then return end
+
+	humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then return end
+	
+	root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	
+	-- turn off auto rotate 
+	humanoid.AutoRotate = false
+
+	-- loop to maintain face direction
+	connection = RunService.RenderStepped:Connect(function()
+		
+		-- get direction of camera
+		local cameralook = camera.CFrame.LookVector
+		local cameraflat = Vector3.new(cameralook.X, 0, cameralook.Z).Unit
+		
+		root.CFrame = CFrame.new(root.Position, root.Position + cameraflat)
+		
+		if angle then -- apply initial offset angle if set
+			root.CFrame *= CFrame.Angles(0, -angle, 0) -- inverse angle as it seems to be inverted by default
+		end
+		
+		-- offset camera to the right in world space
+		local right = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z).Unit
+		
+		-- set camera position depending on user selection
+		if position == "right" then
+			camera.CFrame += right * 1.75
+		else
+			camera.CFrame += right * -1.75
+		end
+	end)
+end
+
+-- detect toggle input
+local locked = false
+local offset = false
+UserInputService.InputBegan:Connect(function(input, handled)
+	
+	-- enter locked mode
+	if input.KeyCode == Enum.KeyCode.LeftControl and not handled then
+		if not locked then -- lock player cursor
+			locked = true 
+			lockOrientation()
+			
+			-- set cursor
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+			UserInputService.MouseIcon = ("rbxasset://textures/MouseLockedCursor.png")
+			
+		else -- unlock player cursor
+			locked = false
+			connection:Disconnect()
+			
+			-- set cursor
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default 
+			UserInputService.MouseIcon = ("rbxasset://textures/MouseCursor.png")
+			
+			-- set auto rotate back on
+			if humanoid then
+				humanoid.AutoRotate = true
+			end
+		end
+	end
+	
+	-- lock orientation
+	if input.KeyCode == Enum.KeyCode.V and not handled then
+		if not root then return end
+		
+		-- remove angle if unlocked
+		if offset then 
+			offset = false 
+			angle = nil
+			return
+		end
+		offset = true
+		
+		-- get root look vector
+		local rootLook = root.CFrame.LookVector
+		local rootFlat = Vector3.new(rootLook.X, 0, rootLook.Z).Unit
+		
+		-- get camera look vector
+		local cameralook = camera.CFrame.LookVector
+		local cameraflat = Vector3.new(cameralook.X, 0, cameralook.Z).Unit
+		
+		-- get the difference between camera look vector and root look vector
+		local dot = rootFlat:Dot(cameraflat) -- -1 = opposite, 0 = perpendicular, 1 = same
+		local cross = rootFlat:Cross(cameraflat) -- indicates which side makes up the difference with - or +, only need cross.Y for left/right
+		
+		angle = math.atan2(cross.Y, dot) -- get angle difference
+	end
+	
+	-- left arrow
+	if input.KeyCode == Enum.KeyCode.Left then
+		position = "left"
+	end
+	
+	-- right arrow
+	if input.KeyCode == Enum.KeyCode.Right then
+		position = "right"
+	end
+end)
+
+

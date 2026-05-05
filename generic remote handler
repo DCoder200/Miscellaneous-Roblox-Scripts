@@ -1,0 +1,61 @@
+-- place inside server script service (won't do anything in replicated storage)
+-- variables
+local Players = game:GetService("Players")
+local players = Players:GetPlayers()
+
+-- per player dictionary style table with players as keys
+local playerCooldowns = {} -- [player] = {lastActivate = 0, lastDash = 0}
+
+-- request remotes
+local requestDash = game.ReplicatedStorage:FindFirstChild("requestDash")
+
+-- remote cooldowns
+local dashCooldown = 0.5
+local refillCooldown = 2.5
+
+-- populate table with players and set their times to the current timestamp
+for i, player in ipairs(players) do
+	playerCooldowns[player] = {
+		lastCooldown = tick(), 
+		lastDash = tick(), 
+		dashAmount = 3, 
+		lastRefill = 0,}
+end
+
+-- update players list
+Players.PlayerAdded:Connect(function(player)
+	playerCooldowns[player] = {
+		lastCooldown = tick(), 
+		lastDash = tick(), 
+		dashAmount = 3, 
+		lastRefill = 0,}
+end)
+
+-- update if player leaves
+Players.PlayerRemoving:Connect(function(player)
+	playerCooldowns[player] = nil
+end)
+
+-- refill 1 dash for each player if eligable (nested to reduce checks)
+game:GetService("RunService").Heartbeat:Connect(function() 
+	for player, address in pairs(playerCooldowns) do -- go through each player and refill a dash if last refill was 5 seconds or more ago
+		if playerCooldowns[player].dashAmount < 3 then -- check if player has less than 3 dashes stored
+			if tick() - playerCooldowns[player].lastDash >= refillCooldown then -- check last dash time so you don't refill while a player is using up dashes
+				if tick() - playerCooldowns[player].lastRefill >= refillCooldown then -- check last refill time 
+					playerCooldowns[player].lastRefill = tick() -- set last refill time to current tick
+					playerCooldowns[player].dashAmount = playerCooldowns[player].dashAmount + 1 -- add 1 dash to player's available dashes
+				end
+			end
+		end
+	end
+end)
+
+-- handle dash requests
+requestDash.OnServerEvent:Connect(function(player)
+	if tick() - playerCooldowns[player].lastDash >= dashCooldown and playerCooldowns[player].dashAmount > 0 then -- compare player's last dash timestamp to current timestamp
+		playerCooldowns[player].lastDash = tick()
+		playerCooldowns[player].dashAmount = playerCooldowns[player].dashAmount - 1 -- reduce dash amount since player has dashed
+		requestDash:FireClient(player) -- fire response remote
+	end
+end)
+

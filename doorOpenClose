@@ -1,0 +1,59 @@
+-- script inside doors folder that contains all the doors
+
+-- dictionaries 
+local states = {} -- track open and close state per door
+local debounces = {} -- track debounce per door
+
+-- doors remote to tween on the clients in replicated storage
+local doorsRemote = game.ReplicatedStorage.Remotes.doorsRemote
+
+-- collection service 
+local CollectionService = game:GetService("CollectionService")
+
+-- function to handle opening and closing
+local function openClose(door, slider, button)
+	if tick() - debounces[door] < 1 then return end
+	debounces[door] = tick()
+	
+	-- invert this when closing
+	local goal_Y = slider.Size.Y - 0.1
+	
+	-- check if door is open or closed
+	if states[door] == "open" then
+		states[door] = "closed"
+		slider.CanCollide = true -- set collision so it's not client dependant even with desyncs
+		button.Color = Color3.fromRGB(255, 0, 0)
+		goal_Y *= -1 -- invert goal_Y for closing door
+		
+	else -- closed door
+		states[door] = "open"
+		slider.CanCollide = false -- set collision so it's not client dependant even with desyncs
+		button.Color = Color3.fromRGB(0, 255, 0)
+	end
+
+	-- fire remote to all clients
+	doorsRemote:FireAllClients(slider, goal_Y)
+end
+
+-- get all tagged doors and set them up
+for _, door in pairs(CollectionService:GetTagged("door")) do
+	local button = door.button
+	local clickDetector = button.ClickDetector
+	local slider = door.slider
+	
+	-- connect click detector click events to openClose function for each detector
+	clickDetector.MouseClick:Connect(function()
+		openClose(door, slider, button)
+	end)
+	
+	-- set per door dictionaries 
+	states[door] = "closed"
+	button.Color = Color3.fromRGB(255, 0, 0)
+	debounces[door] = 0
+end
+
+
+
+
+
+

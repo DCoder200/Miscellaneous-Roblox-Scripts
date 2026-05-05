@@ -1,0 +1,14 @@
+-- remote to receive from server in replicated storage
+local doorsRemote = game.ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("doorsRemote")
+
+-- tween setup
+local TweenService = game:GetService("TweenService")
+local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- listen for door open/close events and tween the slider
+doorsRemote.OnClientEvent:Connect(function(slider, goal_Y)
+	
+	local goal = {CFrame = slider.CFrame * CFrame.new(0, goal_Y, 0)}
+	local tween = TweenService:Create(slider, tweenInfo, goal)
+	tween:Play()
+end)

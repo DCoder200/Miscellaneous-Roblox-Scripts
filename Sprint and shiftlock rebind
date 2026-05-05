@@ -1,0 +1,89 @@
+-- local script in starter player scripts
+-- services
+local UserInputService = game:GetService("UserInputService") -- declare service variable
+
+-- player variables
+local player = game.Players.LocalPlayer -- use this for player, might be tempted to use passed player from remote but it's unreliable
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local root = character:WaitForChild("HumanoidRootPart")
+
+-- detect respawns and reset variables
+player.CharacterAdded:Connect(function(character)
+	character = character
+	humanoid = character:WaitForChild("Humanoid")
+	root = character:WaitForChild("HumanoidRootPart")
+end)
+
+-- attach a linear velocity to the player's root part
+--local linearVelocity = Instance.new("LinearVelocity")
+--linearVelocity.Attachment0 = root.root.RootAttachment
+--linearVelocity.VectorVelocity = root.CFrame.LookVector * 100
+--linearVelocity.MaxForce = 10000
+--linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+--linearVelocity.Parent = root
+--linearVelocity.ReactionForceEnabled = true
+--linearVelocity.Enabled = false
+
+-- get bound keys to change shift lock keybind
+local playerModule = player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
+local cameraModule = playerModule:WaitForChild("CameraModule")
+local mouseLockController = cameraModule:WaitForChild("MouseLockController")
+local boundKeys = mouseLockController:WaitForChild("BoundKeys")
+
+-- set value to ctrl 
+boundKeys.Value = "LeftControl"
+
+-- request remote
+local requestDash = game.ReplicatedStorage.Remotes:WaitForChild("requestDash")
+
+-- flag to indicate whether shift is being held
+local sprintSpeed = 1.75
+local function sprint(switch)
+	if switch then
+		humanoid.WalkSpeed *= sprintSpeed
+	else
+		humanoid.WalkSpeed = (humanoid.WalkSpeed / sprintSpeed) * 1
+	end
+end
+
+-- detect dash and sprint inputs 
+UserInputService.InputBegan:Connect(function(input, handled)
+	if not handled then
+		if input.KeyCode == Enum.KeyCode.C then
+			requestDash:FireServer() -- request dash to server
+		end
+		
+		-- sprinting
+		if input.KeyCode == Enum.KeyCode.LeftShift then
+			sprint(true)
+		end
+	end
+end)
+
+-- detect sprint end
+UserInputService.InputEnded:Connect(function(input, handled)
+	if input.KeyCode == Enum.KeyCode.LeftShift then
+		sprint(false)
+	end
+end)
+
+-- dash when remote responds 
+requestDash.OnClientEvent:Connect(function()
+	local force = 0
+	
+	-- set force based on if player is in air or not to make dashes equally strong 
+	if humanoid.FloorMaterial == Enum.Material.Air then
+		force = 100
+	else -- not air
+		force = 200
+	end
+	
+	-- apply impulse in direction vector
+	local moveDir = humanoid.MoveDirection
+	local impulse = moveDir * root.AssemblyMass * force --vector x mass * 100
+	root:ApplyImpulse(impulse)
+end)
+
+
+

@@ -1,0 +1,155 @@
+-- shared by client and server so both apply the same transforms to their respective models
+
+-- services
+local RunService = game:GetService("RunService")
+
+-- store some vehicle data
+local vehicleData = {}
+
+-- function to determine if script is being used by client or server
+local function setContext(vehiclePart)
+	if not vehiclePart then return "server" end
+	if vehiclePart then return "client" end
+end
+
+local heliActions = {}
+
+-- function to startup rotor logic
+function heliActions.startup(vehiclePart)
+	local context = setContext(vehiclePart)
+	
+	-- make sure vehicleData[vehiclePart] exists
+	vehicleData[vehiclePart] = {
+		lastDirection = Vector3.zero,
+	}
+	
+	-- super simplified logic
+	--RunService.Heartbeat:Connect(function()
+	--	local up = vehiclePart.CFrame.UpVector
+	--	local direction = Vector3.new(up.X, 0, up.Z)
+
+	--	vehiclePart.CFrame += direction
+	--end)
+	
+	local rotorPower = 50
+
+	RunService.Heartbeat:Connect(function(deltaTime)
+		
+		-- CFrame components to get "up" and "forward" directions
+		local cf = vehiclePart.CFrame
+		local up = cf.UpVector  -- "up" direction of the CFrame (changes from any applied rotations)
+		local forward = cf.LookVector -- "forward" direction of the CFrame 
+
+		-- horizontal movement based on tilt (UpVector), takes into account roll and yaw
+		local horizontal = Vector3.new(up.X, 0, up.Z) -- ignore Y
+		if horizontal.Magnitude > 0 then
+			horizontal = horizontal.Unit * (1 - up.Y)  -- scale by tilt
+		end
+
+		-- scale forward movement based on pitch 
+		local pitchAmount = -forward.Y  -- forward tilt
+		local forwardBoost = Vector3.new(forward.X, (forward.Y * 0.1), forward.Z) * pitchAmount -- small bit of descension if look vector pitched down
+
+		-- final movement direction
+		local direction = horizontal + forwardBoost
+		
+		-- cache last direction if there's none
+		if vehicleData[vehiclePart].lastDirection == Vector3.zero then
+			vehicleData[vehiclePart].lastDirection = direction
+
+		else -- lerp from last direction to direction
+			direction = vehicleData[vehiclePart].lastDirection:Lerp(direction, 0.1)
+			vehicleData[vehiclePart].lastDirection = direction
+		end
+
+		-- apply movement
+		vehiclePart.CFrame += ((direction * rotorPower) * deltaTime)
+	end)
+end
+
+-- function to increase altitude
+function heliActions.increaseAltitude(vehiclePart)
+	local context = setContext(vehiclePart)
+	task.wait()
+	
+	-- move vehicle cframe up 
+	vehiclePart.CFrame = vehiclePart.CFrame * CFrame.new(0, 0.25, 0)
+end
+
+-- function to decrease altitude
+function heliActions.decreaseAltitude(vehiclePart)
+	local context = setContext(vehiclePart)
+	task.wait()
+	
+	-- move vehicle cframe down
+	vehiclePart.CFrame = vehiclePart.CFrame * CFrame.new(0, -0.25, 0)
+end
+
+-- function to tilt right
+function heliActions.tiltRight(vehiclePart)
+	local context = setContext(vehiclePart)
+	task.wait()
+	
+	-- tilt vehicle cframe right
+	vehiclePart.CFrame = vehiclePart.CFrame * CFrame.Angles(0, 0, -0.025)
+end
+
+-- function to tilt left
+function heliActions.tiltLeft(vehiclePart)
+	local context = setContext(vehiclePart)
+	task.wait()
+	
+	-- tilt vehicle cframe left
+	vehiclePart.CFrame = vehiclePart.CFrame * CFrame.Angles(0, 0, 0.025)
+end
+
+-- function to tilt down
+function heliActions.tiltDown(vehiclePart)
+	local context = setContext(vehiclePart)
+	task.wait()
+	
+	-- tilt vehicle cframe down
+	vehiclePart.CFrame = vehiclePart.CFrame * CFrame.Angles(-0.025, 0, 0)
+end
+
+-- function to tilt up
+function heliActions.tiltUp(vehiclePart)
+	local context = setContext(vehiclePart)
+	task.wait()
+	
+	-- tilt vehicle cframe up
+	vehiclePart.CFrame = vehiclePart.CFrame * CFrame.Angles(0.025, 0, 0)
+end
+
+-- function to turn 
+function heliActions.turn(vehiclePart, lookVector)
+	local context = setContext(vehiclePart)
+	task.wait()
+	
+	-- compare look vector to vehicle look vector 
+	local vehicleLookVector = vehiclePart.CFrame.LookVector
+	local dot = vehicleLookVector:Dot(lookVector) -- how close vectors are (1 means equal and < 1 isn't)
+	local cross = vehicleLookVector:Cross(lookVector) -- indicates which side makes up the difference with - or +
+
+	-- check difference (dot product)
+	if dot < 0.8 then
+		
+		-- turn vehicle cframe left
+		if cross.Y < 0 then -- only need Y value because we only want to turn left or right
+			print("turn left")
+			vehiclePart.CFrame = vehiclePart.CFrame * CFrame.Angles(0, -0.05, 0)
+			
+		else -- turn cframe right
+			print("turn right")
+			vehiclePart.CFrame = vehiclePart.CFrame * CFrame.Angles(0, 0.05, 0)
+		end
+	end
+end
+
+-- test function
+function heliActions.test()
+	print("test function called")
+end
+
+return heliActions
+

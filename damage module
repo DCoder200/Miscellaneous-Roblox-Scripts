@@ -1,0 +1,104 @@
+-- module script in server script service 
+-- player variables
+local Players = game:GetService("Players")
+local players = Players:GetPlayers()
+
+-- modules
+local npcManager = require(game.ServerScriptService.Modules.npcManager)
+
+-- remotes
+local requestDamage = game.ReplicatedStorage.Remotes.requestDamage
+
+-- per player dictionary style table with players as keys
+local characterDamaged = {}  -- [player] = {lastDamaged = 0}
+local idDamaged = {} -- [id] = {lastDamaged = 0}
+
+-- damage debounce
+local damageDebounce = 0.5
+
+-- update players list
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function(character)
+		characterDamaged[character] = {lastDamaged = tick()}
+	end)
+end)
+
+-- update if player leaves
+Players.PlayerRemoving:Connect(function(player)
+	player.CharacterRemoving:Connect(function(character)
+		characterDamaged[character] = nil
+	end)
+end)
+
+local damage
+local doDamage = {}
+-- 3 arguments for player, amount of health and if it damages armour
+function doDamage.Validate(character, amount, armourPiercing) 
+
+	-- find humanoid from passed argument
+	local humanoid = character:FindFirstChild("Humanoid") 
+	local armour = character:GetAttribute("Armour")
+
+	if not characterDamaged[character] then
+		characterDamaged[character] = {lastDamaged = 0}
+	end
+
+	local lastHit = characterDamaged[character].lastDamaged 
+	if tick() - lastHit >= damageDebounce then
+		characterDamaged[character].lastDamaged = tick() -- set new timestamp for when player was last damaged
+
+		-- check if player has armour
+		if armour then
+			if armour > 0 and armourPiercing then -- apply damage to armour if armour piercing was used
+				local armour = armour - armourPiercing
+				character:SetAttribute("Armour", armour)
+			end
+			damage = math.clamp(amount* (1 - (armour / 100)), 1, 10000) -- set damage with -1% damage per point of armour, limit to minimum of 1 and max of 10000 damage
+		else
+			damage = amount -- set damage to amount if player has no armour
+		end
+
+		-- apply damage amount
+		if humanoid then
+			humanoid:takeDamage(damage)
+		end
+	end
+end
+
+-- damage function for ghost npcs
+function doDamage.ValidateID(id, position, amount, armourPiercing)
+	
+	-- get actual position of npc
+	local realPosition = npcManager.getPosition(id)
+	if not realPosition then return end
+	
+	-- compare against client provided position with some leeway
+	if (position - realPosition).Magnitude > 5 then return end
+	
+	-- track last damage if not tracked
+	if not idDamaged[id] then
+		idDamaged[id] = {lastDamaged = 0}
+	end
+	
+	-- debounce hits for id 
+	if tick() - idDamaged[id].lastDamaged <= damageDebounce then return end
+	idDamaged[id].lastDamaged = tick() -- set new timestamp for when id was last damaged
+	
+	npcManager.damageNPC(id, amount, armourPiercing)
+end
+
+-- connect remote event to damage function
+requestDamage.OnServerEvent:Connect(function(player, character, id, amount, armourPiercing)
+	if character then
+		doDamage.Validate(character, amount, armourPiercing)
+	else -- look for an id
+		if id then
+			doDamage.ValidateID(id, amount, armourPiercing)
+		end
+	end
+end)
+
+return doDamage
+
+
+

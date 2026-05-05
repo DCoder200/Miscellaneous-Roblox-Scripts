@@ -1,0 +1,140 @@
+-- server will have the vehicle true states and transforms, but no physical parts
+-- it will replicate a physical vehicle to all clients except the driver's at 10fps and let clients interpolate
+-- if someone sits in the drivers seat it will give the player network ownership over the replicated model
+-- server will stop replicating the true state model to the driver directly (other than making small corrections)
+
+print("hi")
+
+-- player
+local player = game.Players.LocalPlayer
+local character = player.Character
+local humanoid = character.Humanoid
+
+-- vehicle 
+local vehicle = workspace.helicopter.base
+
+-- services
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+
+-- modules 
+local helicopterControls = require(replicatedStorage.Modules:WaitForChild("helicopterControls"))
+
+-- store control states in dictionary
+local controlStates = {
+	rising = false,
+	lowering = false,
+	tiltingRight = false,
+	tiltingLeft = false,
+	tiltingUp = false,
+	tiltingDown = false,
+	turning = false
+}
+
+-- function to keep requesting module functions aslong as key is held
+local function holdToInput(functionName, vehicle, controlState)
+	while controlStates[controlState] do
+		task.wait()
+		
+		-- get camera look vector if turning
+		local lookVector 
+		if controlState == "turning" then
+			lookVector = workspace.CurrentCamera.CFrame.LookVector
+			lookVector = Vector3.new(lookVector.X, 0, lookVector.Z).Unit -- normalise and remove Y component
+		end
+		
+		helicopterControls[functionName](vehicle, lookVector)
+	end
+end
+
+-- detect inputs
+UserInputService.InputBegan:Connect(function(input, handled)
+	if handled then print("handled") return end
+	
+	-- startup
+	if input.KeyCode == Enum.KeyCode.F then
+		helicopterControls.startup(vehicle)
+	end
+	
+	-- increase altitude 
+	if input.KeyCode == Enum.KeyCode.E then
+		controlStates.rising = true
+		holdToInput("increaseAltitude", vehicle, "rising")
+	end
+	
+	-- decrease altitude
+	if input.KeyCode == Enum.KeyCode.Q then
+		controlStates.lowering = true
+		holdToInput("decreaseAltitude", vehicle, "lowering")
+	end
+	
+	-- tilt right
+	if input.KeyCode == Enum.KeyCode.D then
+		controlStates.tiltingRight = true
+		holdToInput("tiltRight", vehicle, "tiltingRight")
+	end
+	
+	-- tilt left
+	if input.KeyCode == Enum.KeyCode.A then
+		controlStates.tiltingLeft = true
+		holdToInput("tiltLeft", vehicle, "tiltingLeft")
+	end
+	
+	-- tilt down
+	if input.KeyCode == Enum.KeyCode.W then
+		controlStates.tiltingDown = true
+		holdToInput("tiltDown", vehicle, "tiltingDown")
+	end
+	
+	-- tilt up 
+	if input.KeyCode == Enum.KeyCode.S then
+		controlStates.tiltingUp = true
+		holdToInput("tiltUp", vehicle, "tiltingUp")
+	end
+	
+	-- turn
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		controlStates.turning = true
+		holdToInput("turn", vehicle, "turning")
+	end
+end)
+
+-- detect end of inputs
+UserInputService.InputEnded:Connect(function(input, handled)
+	
+	-- stop rising
+	if input.KeyCode == Enum.KeyCode.E then
+		controlStates.rising = false
+	end
+	
+	-- stop lowering
+	if input.KeyCode == Enum.KeyCode.Q then
+		controlStates.lowering = false
+	end
+	
+	-- stop tilting right
+	if input.KeyCode == Enum.KeyCode.D then
+		controlStates.tiltingRight = false
+	end
+	
+	-- stop tilting left
+	if input.KeyCode == Enum.KeyCode.A then
+		controlStates.tiltingLeft = false
+	end
+	
+	-- stop tilting down
+	if input.KeyCode == Enum.KeyCode.W then
+		controlStates.tiltingDown = false
+	end
+	
+	-- stop tilting up	
+	if input.KeyCode == Enum.KeyCode.S then	
+		controlStates.tiltingUp = false
+	end
+	
+	-- stop turning
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		controlStates.turning = false
+	end
+end)

@@ -1,0 +1,20 @@
+-- needed parts
+local seat = script.Parent
+local controls = seat.driverInputs
+
+-- detect if player sat in seat
+seat:GetPropertyChangedSignal("Occupant"):Connect(function(occupant)
+	
+	local character = seat.Occupant.Parent
+	if not character then return end
+	
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then return end
+	
+	local player = game.Players:GetPlayerFromCharacter(character)
+	if not player then return end
+	
+	-- clone control script into character
+	local controlsScriptClone = controls:Clone()
+	controlsScriptClone.Parent = character
+end)
